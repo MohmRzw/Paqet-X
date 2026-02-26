@@ -109,7 +109,9 @@ ui_section() {
 ui_menu_item() {
     local index="$1"
     local text="$2"
-    printf " ${GREEN}[%2s]${NC} %s\n" "$index" "$text"
+    local hint="${3:-}"
+    printf " ${GREEN}[%2s]${NC} ${BOLD}${WHITE}%s${NC}\n" "$index" "$text"
+    [ -n "$hint" ] && printf "      ${GRAY}%s${NC}\n" "$hint"
 }
 
 ui_info_row() {
@@ -118,9 +120,37 @@ ui_info_row() {
     printf " ${CYAN}%-18s${NC} : ${WHITE}%b${NC}\n" "$key" "$value"
 }
 
+ui_progress() {
+    local percent="$1"
+    local label="${2:-Working...}"
+    local width=34
+    [ "$percent" -lt 0 ] && percent=0
+    [ "$percent" -gt 100 ] && percent=100
+    local filled=$((percent * width / 100))
+    local empty=$((width - filled))
+
+    printf "\r ${BLUE}[${GREEN}%s${BLUE}%s]${NC} ${WHITE}%3d%%${NC} ${CYAN}%s${NC}" \
+        "$(repeat_char "#" "$filled")" \
+        "$(repeat_char "." "$empty")" \
+        "$percent" \
+        "$label"
+    [ "$percent" -ge 100 ] && echo ""
+}
+
+ui_logo() {
+    echo -e "${CYAN}${BOLD}   _____    ___    ____   ______ _______   __${NC}"
+    echo -e "${CYAN}${BOLD}  |  __ \\  / _ \\  / __ \\ |  ____|__   __| / /${NC}"
+    echo -e "${CYAN}${BOLD}  | |__) || | | || |  | || |__     | |   / / ${NC}"
+    echo -e "${CYAN}${BOLD}  |  ___/ | | | || |  | ||  __|    | |  / /  ${NC}"
+    echo -e "${CYAN}${BOLD}  | |     | |_| || |__| || |____   | | / /   ${NC}"
+    echo -e "${CYAN}${BOLD}  |_|      \\___/  \\___\\_\\|______|  |_|/_/    ${NC}"
+}
+
 show_banner() {
     clear
+    ui_logo
     ui_header "PAQET-X MANAGER v${SCRIPT_VERSION}" "Professional Tunnel Control Panel"
+    ui_info_row "Mode" "Interactive setup and management"
     ui_rule "$MAGENTA"
     echo ""
 }
@@ -261,18 +291,44 @@ EOF
 install_dependencies() {
     show_banner
     ui_header "Dependency Installer" "Preparing required system packages"
-    print_step "Installing dependencies..."
+    ui_section "Installation Progress"
+    ui_progress 5 "Detecting operating system"
     local os=$(detect_os)
+
     case $os in
         ubuntu|debian)
+            ui_progress 20 "Updating package index"
             apt update -qq >/dev/null 2>&1 || true
-            apt install -y curl wget libpcap-dev iptables lsof iproute2 cron dnsutils >/dev/null 2>&1
+            ui_progress 60 "Installing required packages"
+            if ! apt install -y curl wget libpcap-dev iptables lsof iproute2 cron dnsutils >/dev/null 2>&1; then
+                echo ""
+                print_error "Package installation failed"
+                pause
+                return 1
+            fi
+            ui_progress 85 "Applying iptables persistence"
             install_iptables_persistent ;;
         centos|rhel|fedora|rocky|almalinux)
-            yum install -y curl wget libpcap-devel iptables lsof iproute cronie bind-utils >/dev/null 2>&1
+            ui_progress 20 "Updating package metadata"
+            yum makecache -q >/dev/null 2>&1 || true
+            ui_progress 60 "Installing required packages"
+            if ! yum install -y curl wget libpcap-devel iptables lsof iproute cronie bind-utils >/dev/null 2>&1; then
+                echo ""
+                print_error "Package installation failed"
+                pause
+                return 1
+            fi
+            ui_progress 85 "Applying iptables persistence"
             install_iptables_persistent ;;
-        *) print_warning "Unknown OS. Install manually: libpcap iptables curl cron dnsutils" ;;
+        *)
+            ui_progress 100 "Manual install required"
+            print_warning "Unknown OS. Install manually: libpcap iptables curl cron dnsutils"
+            pause
+            return 1
+            ;;
     esac
+
+    ui_progress 100 "Dependencies installed"
     print_success "Dependencies installed"
     pause
 }
@@ -294,17 +350,25 @@ install_paqet() {
     echo ""
 
     local download_url="$DOWNLOAD_URL"
-    print_info "Downloading from $download_url ..."
+    ui_section "Installation Progress"
+    ui_progress 10 "Preparing installer"
+    echo ""
+    print_info "Source: $download_url"
+    echo -e "${CYAN}${BOLD}Download Progress:${NC}"
 
     mkdir -p "$INSTALL_DIR"
-    if ! curl -fsSL "$download_url" -o "/tmp/${BIN_NAME}.download" 2>/dev/null; then
+    if ! curl -fL --progress-bar "$download_url" -o "/tmp/${BIN_NAME}.download"; then
+        echo ""
         print_error "Download failed"; pause; return 1
     fi
 
+    ui_progress 75 "Deploying binary"
     if [ -s "/tmp/${BIN_NAME}.download" ]; then
         cp "/tmp/${BIN_NAME}.download" "$BIN_DIR/$BIN_NAME" && chmod +x "$BIN_DIR/$BIN_NAME"
+        ui_progress 100 "Installation complete"
         print_success "Installed to $BIN_DIR/$BIN_NAME"
     else
+        echo ""
         print_error "Downloaded file is empty"
     fi
     rm -f "/tmp/${BIN_NAME}.download"
@@ -1129,7 +1193,7 @@ check_dependencies() {
 main_menu() {
     while true; do
         show_banner
-        ui_header "Main Menu" "Central control for install, configure and operations"
+        ui_header "Main Menu" "Professional control center"
 
         local core_state core_version deps_state
 
@@ -1167,14 +1231,14 @@ main_menu() {
         ui_info_row "Tunnels" "${WHITE}$active_count${NC} active / ${WHITE}$tunnel_count${NC} total"
 
         ui_section "Operations"
-        ui_menu_item "1" "Install Dependencies"
-        ui_menu_item "2" "Install / Update Paqet-X Core"
-        ui_menu_item "3" "Configure Server (Kharej)"
-        ui_menu_item "4" "Configure Client (Iran)"
-        ui_menu_item "5" "Service Management"
-        ui_menu_item "6" "Status"
-        ui_menu_item "7" "Uninstall"
-        ui_menu_item "0" "Exit"
+        ui_menu_item "1" "Install Dependencies" "Install required packages and tools"
+        ui_menu_item "2" "Install / Update Paqet-X Core" "Download latest core binary"
+        ui_menu_item "3" "Configure Server (Kharej)" "Create and run server profile"
+        ui_menu_item "4" "Configure Client (Iran)" "Create and run client profile"
+        ui_menu_item "5" "Service Management" "Manage all configured services"
+        ui_menu_item "6" "Status" "Show runtime and tunnel health"
+        ui_menu_item "7" "Uninstall" "Remove core or everything"
+        ui_menu_item "0" "Exit" "Leave control panel"
         echo ""
 
         read -p "Choose [0-7]: " choice
