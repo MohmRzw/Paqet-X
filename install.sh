@@ -4,10 +4,10 @@
 #=================================================
 
 # Colors
-readonly RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[1;33m'
-readonly CYAN='\033[0;36m' BLUE='\033[0;34m' MAGENTA='\033[0;35m'
-readonly WHITE='\033[1;37m' GRAY='\033[0;37m' BOLD='\033[1m'
-readonly NC='\033[0m'
+readonly RED=$'\033[0;31m' GREEN=$'\033[0;32m' YELLOW=$'\033[1;33m'
+readonly CYAN=$'\033[0;36m' BLUE=$'\033[0;34m' MAGENTA=$'\033[0;35m'
+readonly WHITE=$'\033[1;37m' GRAY=$'\033[0;37m' BOLD=$'\033[1m'
+readonly NC=$'\033[0m'
 
 # Config
 readonly SCRIPT_VERSION="1.0"
@@ -16,7 +16,7 @@ readonly BIN_NAME="Paqet-X"
 readonly INSTALL_DIR="/opt/paqet-x"
 readonly CONFIG_DIR="/etc/paqet-x"
 readonly SERVICE_DIR="/etc/systemd/system"
-readonly DOWNLOAD_URL="https://github.com/MrAminiDev/Paqet-X-Nulled/archive/refs/tags/v2.0.0-FIX.tar.gz"
+readonly DOWNLOAD_URL="https://raw.githubusercontent.com/MohmRzw/Paqet-X/main/Paqet-Xv2"
 readonly DEFAULT_LISTEN_PORT="8888"
 readonly DEFAULT_KCP_MODE="fast"
 readonly DEFAULT_ENCRYPTION="aes-128-gcm"
@@ -115,14 +115,12 @@ ui_menu_item() {
 ui_info_row() {
     local key="$1"
     local value="$2"
-    printf " ${CYAN}%-18s${NC} : ${WHITE}%s${NC}\n" "$key" "$value"
+    printf " ${CYAN}%-18s${NC} : ${WHITE}%b${NC}\n" "$key" "$value"
 }
 
 show_banner() {
     clear
     ui_header "PAQET-X MANAGER v${SCRIPT_VERSION}" "Professional Tunnel Control Panel"
-    ui_info_row "GitHub" "https://github.com/MrAminiDev/Paqet-X-Nulled/"
-    ui_info_row "Telegram" "t.me/AminiDev"
     ui_rule "$MAGENTA"
     echo ""
 }
@@ -284,7 +282,7 @@ install_dependencies() {
 # -------------------------------------------------
 install_paqet() {
     show_banner
-    ui_header "Install / Update Paqet-X Core" "Download, extract and deploy binary"
+    ui_header "Install / Update Paqet-X Core" "Download and deploy binary"
 
     local arch=$(detect_arch) || return 1
     local current="Not installed"
@@ -299,29 +297,17 @@ install_paqet() {
     print_info "Downloading from $download_url ..."
 
     mkdir -p "$INSTALL_DIR"
-    if ! curl -fsSL "$download_url" -o "/tmp/paqet.tar.gz" 2>/dev/null; then
+    if ! curl -fsSL "$download_url" -o "/tmp/${BIN_NAME}.download" 2>/dev/null; then
         print_error "Download failed"; pause; return 1
     fi
 
-    print_success "Downloaded"
-    rm -rf "$INSTALL_DIR"/*
-    tar -xzf "/tmp/paqet.tar.gz" -C "$INSTALL_DIR" 2>/dev/null || { print_error "Extract failed"; pause; return 1; }
-
-    local binary=""
-    for pattern in "Paqet-X" "paqet-x" "paqet" "Paqet"; do
-        binary=$(find "$INSTALL_DIR" -type f -iname "*${pattern}*" 2>/dev/null | head -1)
-        [ -n "$binary" ] && break
-    done
-    [ -z "$binary" ] && binary=$(find "$INSTALL_DIR" -type f -executable 2>/dev/null | head -1)
-
-    if [ -n "$binary" ]; then
-        cp "$binary" "$BIN_DIR/$BIN_NAME" && chmod +x "$BIN_DIR/$BIN_NAME"
+    if [ -s "/tmp/${BIN_NAME}.download" ]; then
+        cp "/tmp/${BIN_NAME}.download" "$BIN_DIR/$BIN_NAME" && chmod +x "$BIN_DIR/$BIN_NAME"
         print_success "Installed to $BIN_DIR/$BIN_NAME"
     else
-        print_error "Binary not found in archive"
-        ls -la "$INSTALL_DIR"
+        print_error "Downloaded file is empty"
     fi
-    rm -f "/tmp/paqet.tar.gz"
+    rm -f "/tmp/${BIN_NAME}.download"
     pause
 }
 
@@ -1169,10 +1155,10 @@ main_menu() {
         # Show active tunnels count
         local tunnel_count
         tunnel_count=$(systemctl list-unit-files --type=service --no-legend --no-pager 2>/dev/null |
-                      grep -cE '^paqet-x-.*\.service' || echo "0")
+                      grep -cE '^paqet-x-.*\.service' || true)
         local active_count
         active_count=$(systemctl list-units --type=service --state=active --no-legend --no-pager 2>/dev/null |
-                      grep -cE 'paqet-x-' || echo "0")
+                      grep -cE 'paqet-x-' || true)
 
         ui_section "Environment Status"
         ui_info_row "Core" "$core_state"
