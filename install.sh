@@ -11,12 +11,14 @@ readonly NC=$'\033[0m'
 
 # Config
 readonly SCRIPT_VERSION="1.0"
+readonly SCRIPT_BUILD="2026.02.27.01"
 readonly BIN_DIR="/usr/local/bin"
 readonly BIN_NAME="Paqet-X"
 readonly INSTALL_DIR="/opt/paqet-x"
 readonly CONFIG_DIR="/etc/paqet-x"
 readonly SERVICE_DIR="/etc/systemd/system"
 readonly DOWNLOAD_URL="https://raw.githubusercontent.com/MohmRzw/Paqet-X/main/Paqet-Xv2"
+readonly SELF_UPDATE_URL="https://raw.githubusercontent.com/MohmRzw/Paqet-X/main/install.sh"
 readonly DEFAULT_LISTEN_PORT="8888"
 readonly DEFAULT_KCP_MODE="fast"
 readonly DEFAULT_ENCRYPTION="aes-128-gcm"
@@ -109,9 +111,7 @@ ui_section() {
 ui_menu_item() {
     local index="$1"
     local text="$2"
-    local hint="${3:-}"
     printf " ${GREEN}[%2s]${NC} ${BOLD}${WHITE}%s${NC}\n" "$index" "$text"
-    [ -n "$hint" ] && printf "      ${GRAY}%s${NC}\n" "$hint"
 }
 
 ui_info_row() {
@@ -137,22 +137,33 @@ ui_progress() {
     [ "$percent" -ge 100 ] && echo ""
 }
 
-ui_logo() {
-    echo -e "${CYAN}${BOLD}   _____    ___    ____   ______ _______   __${NC}"
-    echo -e "${CYAN}${BOLD}  |  __ \\  / _ \\  / __ \\ |  ____|__   __| / /${NC}"
-    echo -e "${CYAN}${BOLD}  | |__) || | | || |  | || |__     | |   / / ${NC}"
-    echo -e "${CYAN}${BOLD}  |  ___/ | | | || |  | ||  __|    | |  / /  ${NC}"
-    echo -e "${CYAN}${BOLD}  | |     | |_| || |__| || |____   | | / /   ${NC}"
-    echo -e "${CYAN}${BOLD}  |_|      \\___/  \\___\\_\\|______|  |_|/_/    ${NC}"
-}
-
 show_banner() {
     clear
-    ui_logo
-    ui_header "PAQET-X MANAGER v${SCRIPT_VERSION}" "Professional Tunnel Control Panel"
-    ui_info_row "Mode" "Interactive setup and management"
-    ui_rule "$MAGENTA"
-    echo ""
+}
+
+auto_update_script() {
+    command -v curl >/dev/null 2>&1 || return 0
+
+    local remote_tmp="/tmp/paqet-x-install.$$"
+    local remote_build remote_num local_num
+
+    if ! curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" \
+        "${SELF_UPDATE_URL}?t=$(date +%s)" -o "$remote_tmp" 2>/dev/null; then
+        rm -f "$remote_tmp"
+        return 0
+    fi
+
+    remote_build=$(grep -oE 'readonly SCRIPT_BUILD="[0-9.]+"' "$remote_tmp" | head -1 | cut -d'"' -f2)
+    local_num="${SCRIPT_BUILD//./}"
+    remote_num="${remote_build//./}"
+
+    if [[ "$remote_num" =~ ^[0-9]+$ ]] && [[ "$local_num" =~ ^[0-9]+$ ]] && [ "$remote_num" -gt "$local_num" ]; then
+        chmod +x "$remote_tmp"
+        echo -e "${CYAN}${BOLD}[INFO]${NC} New installer detected (${remote_build}), reloading..."
+        exec bash "$remote_tmp" "$@"
+    fi
+
+    rm -f "$remote_tmp"
 }
 
 detect_os() {
@@ -1231,14 +1242,14 @@ main_menu() {
         ui_info_row "Tunnels" "${WHITE}$active_count${NC} active / ${WHITE}$tunnel_count${NC} total"
 
         ui_section "Operations"
-        ui_menu_item "1" "Install Dependencies" "Install required packages and tools"
-        ui_menu_item "2" "Install / Update Paqet-X Core" "Download latest core binary"
-        ui_menu_item "3" "Configure Server (Kharej)" "Create and run server profile"
-        ui_menu_item "4" "Configure Client (Iran)" "Create and run client profile"
-        ui_menu_item "5" "Service Management" "Manage all configured services"
-        ui_menu_item "6" "Status" "Show runtime and tunnel health"
-        ui_menu_item "7" "Uninstall" "Remove core or everything"
-        ui_menu_item "0" "Exit" "Leave control panel"
+        ui_menu_item "1" "Install Dependencies"
+        ui_menu_item "2" "Install / Update Paqet-X Core"
+        ui_menu_item "3" "Configure Server (Kharej)"
+        ui_menu_item "4" "Configure Client (Iran)"
+        ui_menu_item "5" "Service Management"
+        ui_menu_item "6" "Status"
+        ui_menu_item "7" "Uninstall"
+        ui_menu_item "0" "Exit"
         echo ""
 
         read -p "Choose [0-7]: " choice
@@ -1256,5 +1267,6 @@ main_menu() {
     done
 }
 
+auto_update_script "$@"
 check_root
 main_menu

@@ -6,8 +6,10 @@
 ## Install
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/MohmRzw/Paqet-X/main/install.sh)
+bash <(curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' https://raw.githubusercontent.com/MohmRzw/Paqet-X/main/install.sh)
 ```
+
+Installer includes self-update check on each run.
 
 ## Menu Preview
 
